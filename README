@@ -1,0 +1,18 @@
+To run the inital prototype, run runme.sh
+(mini_httpd shows false error like couldn't bind to the address)
+This will run the mini_httpd webserver which is glued with libtorrent-rasterbar
+To successfully compile the program, the requirement is libtorrent-rasterbar which requires boost libraries.
+
+Basic info about mini_httpd
+1. Default port is 8080
+2. default webserver dir is www/ (not /www)
+
+Instructions to demonstrate prototype:
+1. Create .torrent file and place the torrent file in the webserver directory.
+2. In the browser, open http://localhost:8080/torrent_name ( Do not include '/' after torrent_name)
+3. It will show false index showing all the files present in the torrent.
+4. Click on any file to start downloading it.
+5. Browser will show busy and will not move further but the file will start downloading in the www/ directory.
+6. Browser will not serve the file even after completion of download (It's a bug, I will solve it ASAP)
+
+
