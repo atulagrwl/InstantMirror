@@ -1,0 +1,15 @@
+To build these utilities, use
+make utility_name
+
+e.g. make make_torrent for creating torrent file.
+
+All utilities are self explanatory and needs arguments while running.
+
+Utility name		Purpose
+make_torrent		Create .torrent file from given input file or directory
+dump_torrent		Show information about the torrent like trackers, file present etc.
+simple_client		Simple client to download torrent file. 
+client_test		Sophisticated client which shows several information during torrent downloading
+etc.
+
+The main prerequistic to build utilities is the libtorrent-rasterbar installed. If libtorrent-rasterbar has been built but not installed use the make file present in the example/ folder to build utilities.
