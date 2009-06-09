@@ -246,12 +246,10 @@ int getTorrent(const char* path)
 
 		handle.prioritize_files(priorities_files);
 
-		status = handle.status();
-
 		printf("Download started\n");
 		
 		
-		while (1)
+/*		while (1)
 		{
 			std::auto_ptr<alert> a;
 			a = s.pop_alert();
@@ -262,15 +260,19 @@ int getTorrent(const char* path)
 				std::cout<<"Alert\n"<<std::flush;
 			}
 		}
-	//return 1;
+*/	//return 1;
 		while(1)
 		{
+			status = handle.status();
+
 			std::cout<<status.state<<"\t"<<std::flush;
-//			if(status.state == torrent_status::downloading)
+			if(status.state == torrent_status::finished)
 			{
-//				std::cout<< "Download "<<std::flush;
-				sleep(2);
+				std::cout<< "Download Finished\n"<<std::flush;
+				break;
+//				sleep(2);
 			}
+			sleep(5);
 		}
 
 		// wait for the user to end

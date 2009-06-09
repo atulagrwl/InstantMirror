@@ -1753,6 +1753,9 @@ static void do_torrent_file( void )
 	printf("Inside torrent file  - Before getTorrent (Getting %s)\n",file);
 	getTorrent(file);
 	printf("Inside torrent file  - After getTorrent\n");
+	printf("Path of file is %s \n",path);
+	do_file();
+	printf("After do_file in do_torrent_file\n");
 }
 
 #ifdef HAVE_SCANDIR
