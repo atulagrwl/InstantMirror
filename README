@@ -13,6 +13,5 @@ Instructions to demonstrate prototype:
 3. It will show false index showing all the files present in the torrent.
 4. Click on any file to start downloading it.
 5. Browser will show busy and will not move further but the file will start downloading in the www/ directory.
-6. Browser will not serve the file even after completion of download (It's a bug, I will solve it ASAP)
-
+  Browser will not serve the file even after completion of download (It's a bug, I will solve it ASAP)  (SOLVED)
 
