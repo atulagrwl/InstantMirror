@@ -169,7 +169,6 @@ static SSL_CTX* ssl_ctx;
 #endif /* USE_SSL */
 static char cwd[MAXPATHLEN];
 static int got_hup;
-static char** torrent_files;
 static int var;
 
 /* Request variables. */
@@ -1565,6 +1564,7 @@ do_torrent_index( void )
     size_t buflen;
     char* contents;
     size_t contents_size, contents_len;
+    static char** torrent_files;
 #ifdef HAVE_SCANDIR
     int n, i;
     struct dirent **dl;
@@ -1592,8 +1592,8 @@ do_torrent_index( void )
 <HTML>\n\
 <HEAD><TITLE>Index of %s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#99cc99\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
-<H4>Index of %s</H4>\n\
-<PRE>\n",
+<H1>Index of %s</H1>\n\
+<PRE>  <a href="">Name</a>                                            <a href="">Last modified</a>      <a href="">Size</a>      <a href="">Description</a><hr>",
 	file, file );
     add_to_buf( &contents, &contents_size, &contents_len, buf, buflen );
 
@@ -1603,16 +1603,16 @@ do_torrent_index( void )
 	i=0;	
 	while(strcmp(torrent_files[i],"\n")!=0)
 	{
-		add_to_buf(
+/*		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			"<li>",4);
-		add_to_buf(
+*/		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			torrent_details(torrent_files[i]), strlen(torrent_details(torrent_files[i])));
-		add_to_buf(
+/*		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			"</li>",4);
-
+*/
 		i++;
 	}
 		
@@ -1647,7 +1647,7 @@ do_torrent_index( void )
 	SERVER_URL, SERVER_SOFTWARE );
     add_to_buf( &contents, &contents_size, &contents_len, buf, buflen );
 
-//    add_headers( 200, "Ok", "", "", "text/html; charset=%s", contents_len, sb.st_mtime );
+    add_headers( 200, "Ok", "", "", "text/html; charset=%s", contents_len, sb.st_mtime );
     if ( method != METHOD_HEAD )
 	add_to_response( contents, contents_len );
     send_response();
@@ -1694,7 +1694,7 @@ do_dir( void )
 <HTML>\n\
 <HEAD><TITLE>Index of %s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#99cc99\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
-<H4>Index of %s</H4>\n\
+<H1>Index of %s</H1>\n\
 <PRE>\n",
 	file, file );
     add_to_buf( &contents, &contents_size, &contents_len, buf, buflen );
@@ -1774,7 +1774,7 @@ file_details( const char* dir, const char* name )
     (void) strftime( f_time, sizeof( f_time ), "%d%b%Y %H:%M", localtime( &sb.st_mtime ) );
     strencode( encname, sizeof(encname), name );
     (void) snprintf(
-	buf, sizeof( buf ), "<A HREF=\"%s\">%-32.32s</A>    %15s %14lld\n",
+	buf, sizeof( buf ), "<a href=\"%s\">%-32.32s</a>    %15s %14lld\n",
 	encname, name, f_time, (int64_t) sb.st_size );
     return buf;
     }
@@ -1783,10 +1783,11 @@ static char*
 torrent_details( const char* dir )
     {
     static char buf[2000];
+    char space[50] = " ";
 
     (void) snprintf(
-	buf, sizeof( buf ), "<A HREF=\"%s/\%s\">%-60.60s</A>  \n",
-	file,dir,dir );
+	buf, sizeof( buf ), "<a href=\"%s/\%s\">%-.50s</a>%*s10-Jun-2009 23:57  60K\n",
+	file,dir,dir,(50-strlen(dir)),space );
     return buf;
     }
 
@@ -2518,7 +2519,7 @@ send_error_body( int s, char* title, char* text )
 <HTML>\n\
 <HEAD><TITLE>%d %s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#cc9999\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
-<H4>%d %s</H4>\n",
+<H1>%d %s</H1>\n",
 	s, title, s, title );
     add_to_response( buf, buflen );
     buflen = snprintf( buf, sizeof(buf), "%s\n", text );

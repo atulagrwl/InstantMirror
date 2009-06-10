@@ -138,7 +138,7 @@ char** fileList (const char *a )
 	strcat(temp,".torrent");
 //	printf("%s\n",a);
 //	printf("before new char* [10]\n");
-	file = new char* [10];
+//	file = new char* [10];
 //	printf("after new char* \n");
 	std::vector<torfile_list> list;
 	list = mytor.gettor(2,temp);
