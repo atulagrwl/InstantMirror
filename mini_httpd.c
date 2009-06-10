@@ -1292,16 +1292,14 @@ handle_request( void )
 
     r = stat( file, &sb );
 
-    if ( r < 0 )
-	r = get_pathinfo();
-
-    if ( r < 0 )
+    if ( r < 0 || S_ISDIR( sb.st_mode ))
     {
 	printf(" Checking Torrent Index \n");
 	r = check_torrent();
 
 	if (r > -1)
 	{
+		printf(" Generating torrent index \n");
 		do_torrent_index();
 		goto got_one;
 	}
@@ -1321,6 +1319,8 @@ handle_request( void )
 		r = -1;
 	}
 	
+    if ( r < 0 )
+	r = get_pathinfo();
 
     if ( r < 0 )
 	send_error( 404, "Not Found", "", "File not found." );
