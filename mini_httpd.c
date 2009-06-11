@@ -1290,6 +1290,7 @@ handle_request( void )
 #endif /* HAVE_SIGSET */
     (void) alarm( WRITE_TIMEOUT );
 
+    printf("File to be served is %s\n",file);
     r = stat( file, &sb );
 
     if ( r < 0 || S_ISDIR( sb.st_mode ))
@@ -1309,6 +1310,7 @@ handle_request( void )
 	{
 
 		var=0;
+		printf("Will be checking torrent file\n");
 		var=check_file(file);
 		printf("Checking Torrent File.. file found = %d\n",var);
 		if(var == 1)
@@ -1318,6 +1320,7 @@ handle_request( void )
 		}
 		r = -1;
 	}
+    r = stat( file, &sb );
 	
     if ( r < 0 )
 	r = get_pathinfo();
