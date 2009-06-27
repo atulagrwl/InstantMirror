@@ -1,0 +1,335 @@
+Index: src/torrent_info.cpp
+===================================================================
+--- src/torrent_info.cpp	(revision 3693)
++++ src/torrent_info.cpp	(working copy)
+@@ -259,6 +259,7 @@
+ 			{
+ 				switch (attr->string_ptr()[i])
+ 				{
++					case 'l': target.symlink_attribute = true; target.size = 0; break;
+ 					case 'x': target.executable_attribute = true; break;
+ 					case 'h': target.hidden_attribute = true; break;
+ 					case 'p': target.pad_file = true; break;
+@@ -266,6 +267,17 @@
+ 			}
+ 		}
+ 
++		lazy_entry const* s_p = dict.dict_find("symlink path");
++		if (s_p != 0 && s_p->type() == lazy_entry::list_t)
++		{
++			for (int i = 0, end(s_p->list_size()); i < end; ++i)
++			{
++				std::string path_element = s_p->list_at(i)->string_value();
++				trim_path_element(path_element);
++				target.symlink_path /= path_element;
++			}
++		}
++
+ 		return true;
+ 	}
+ 
+@@ -641,12 +653,24 @@
+ 				{
+ 					switch (attr->string_ptr()[i])
+ 					{
++						case 'l': e.symlink_attribute = true; e.size = 0; break;
+ 						case 'x': e.executable_attribute = true; break;
+ 						case 'h': e.hidden_attribute = true; break;
+ 						case 'p': e.pad_file = true; break;
+ 					}
+ 				}
+-			}	
++			}
++
++                	lazy_entry const* s_p = info.dict_find("symlink path");
++	                if (s_p != 0 && s_p->type() == lazy_entry::list_t)
++	                {
++	                        for (int i = 0, end(s_p->list_size()); i < end; ++i)
++        	                {
++                	                std::string path_element = s_p->list_at(i)->string_value();
++                        	        trim_path_element(path_element);
++                                	e.symlink_path /= path_element;
++	                        }
++	                }
+ 			// bitcomet pad file
+ 			if (e.path.string().find("_____padding_file_") != std::string::npos)
+ 				e.pad_file = true;
+Index: src/create_torrent.cpp
+===================================================================
+--- src/create_torrent.cpp	(revision 3693)
++++ src/create_torrent.cpp	(working copy)
+@@ -42,6 +42,8 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
++#define MAX_SYMLINK_PATH 200
++
+ namespace gr = boost::gregorian;
+ 
+ namespace libtorrent
+@@ -69,8 +71,13 @@
+ 			return 0;
+ #else
+ 			struct stat s;
+-			if (stat(convert_to_native(p.external_file_string()).c_str(), &s) < 0) return 0;
+-			return (s.st_mode & S_IXUSR) ? file_storage::attribute_executable : 0;
++			if (lstat(convert_to_native(p.external_file_string()).c_str(), &s) < 0) return 0;
++			int file_attr = 0;
++			if (s.st_mode & S_IXUSR) 
++				file_attr += file_storage::attribute_executable;
++			if(S_ISLNK(s.st_mode))
++				file_attr += file_storage::attribute_symlink;
++			return file_attr;
+ #endif
+ 		}
+ 	
+@@ -85,10 +92,15 @@
+ 			std::string native;
+ 			wchar_utf8(p.string(), native);
+ 			native = convert_to_native(native);
+-
++			
+ 			struct stat s;
+-			if (stat(native.c_str(), &s) < 0) return 0;
+-			return (s.st_mode & S_IXUSR) ? file_storage::attribute_executable : 0;
++			if (lstat(native.c_str(), &s) < 0) return 0;
++			int file_attr = 0;
++			if (s.st_mode & S_IXUSR) 
++				file_attr += file_storage::attribute_executable;
++			if(S_ISLNK(s.st_mode))
++				file_attr += file_storage::attribute_symlink;
++			return file_attr;
+ #endif
+ 		}
+ 
+@@ -130,6 +142,46 @@
+ 			return get_file_mtime(utf8.c_str());
+ #endif
+ 		}
++
++		boost::filesystem::path get_symlink_path(char const* path)
++		{
++			int char_read = 0;
++			char *buf = new char[MAX_SYMLINK_PATH];
++			if( (char_read = readlink(path,buf,MAX_SYMLINK_PATH)) < 0)
++				return 0;
++			if(char_read < MAX_SYMLINK_PATH)
++				buf[char_read] = '\0';
++			else
++				buf[0] = '\0';
++			boost::filesystem::path symlink_pt (buf);
++			if(buf != 0)
++				delete(buf);
++			return symlink_pt;
++		}
++
++		boost::filesystem::path TORRENT_EXPORT get_symlink_path(boost::filesystem::path const& p)
++		{
++#if defined TORRENT_WINDOWS && TORRENT_USE_WPATH
++			std::wstring path = convert_to_wstring(p.external_file_string());
++			return get_symlink_path(path.c_str());
++#else
++			std::string path = convert_to_native(p.external_file_string());
++			return get_symlink_path(p.string().c_str());
++#endif
++		}
++
++		boost::filesystem::path TORRENT_EXPORT get_symlink_path(boost::filesystem::wpath const& p)
++		{
++#ifdef TORRENT_WINDOWS
++			return get_symlink_path(p.string().c_str());
++#else
++			std::string utf8;
++			wchar_utf8(p.string(), utf8);
++			utf8 = convert_to_native(utf8);
++			return get_symlink_path(utf8.c_str());
++#endif
++		}
++
+ 	}
+ 
+ 	create_torrent::create_torrent(file_storage& fs, int piece_size, int pad_file_limit, int flags)
+@@ -305,13 +357,24 @@
+ 		{
+ 			info["mtime"] = m_files.at(0).mtime;
+ 			info["length"] = m_files.at(0).size;
+-			if (m_files.at(0).pad_file || m_files.at(0).hidden_attribute || m_files.at(0).executable_attribute)
++			if (m_files.at(0).pad_file || m_files.at(0).hidden_attribute || m_files.at(0).executable_attribute || m_files.at(0).symlink_attribute)
+ 			{
+ 				std::string& attr = info["attr"].string();
+ 				if (m_files.at(0).pad_file) attr += 'p';
+ 				if (m_files.at(0).hidden_attribute) attr += 'h';
+ 				if (m_files.at(0).executable_attribute) attr += 'x';
++				if (m_files.at(0).symlink_attribute) attr += 'l';
+ 			}
++			if (m_files.at(0).symlink_attribute)
++			{
++				entry& sympath_e = info["symlink path"];
++				
++				for (fs::path::iterator j = (m_files.at(0).symlink_path.begin());
++					j != m_files.at(0).symlink_path.end(); ++j)
++				{
++					sympath_e.list().push_back(entry(*j));
++				}
++			}
+ 		}
+ 		else
+ 		{
+@@ -340,13 +403,24 @@
+ 					{
+ 						path_e.list().push_back(entry(*j));
+ 					}
+-					if (i->pad_file || i->hidden_attribute || i->executable_attribute)
++					if (i->pad_file || i->hidden_attribute || i->executable_attribute || i->symlink_attribute)
+ 					{
+ 						std::string& attr = file_e["attr"].string();
+ 						if (i->pad_file) attr += 'p';
+ 						if (i->hidden_attribute) attr += 'h';
+ 						if (i->executable_attribute) attr += 'x';
++						if (i->symlink_attribute) attr += 'l';
+ 					}
++					if (i->symlink_attribute)
++					{
++						entry& sympath_e = file_e["symlink path"];
++
++						for (fs::path::iterator j = (i->symlink_path.begin());
++							j != i->symlink_path.end(); ++j)
++						{
++							sympath_e.list().push_back(entry(*j));
++						}
++					}
+ 				}
+ 			}
+ 		}
+Index: src/file_storage.cpp
+===================================================================
+--- src/file_storage.cpp	(revision 3693)
++++ src/file_storage.cpp	(working copy)
+@@ -76,11 +76,11 @@
+ 		m_files[index].path = utf8;
+ 	}
+ 
+-	void file_storage::add_file(fs::wpath const& file, size_type size, int flags, std::time_t mtime)
++	void file_storage::add_file(fs::wpath const& file, size_type size, int flags, std::time_t mtime, fs::path const& symlink_path)
+ 	{
+ 		std::string utf8;
+ 		wchar_utf8(file.string(), utf8);
+-		add_file(utf8, size, flags, mtime);
++		add_file(utf8, size, flags, mtime, symlink_path);
+ 	}
+ #endif
+ 
+@@ -164,7 +164,7 @@
+ 		return ret;
+ 	}
+ 
+-	void file_storage::add_file(fs::path const& file, size_type size, int flags, std::time_t mtime)
++	void file_storage::add_file(fs::path const& file, size_type size, int flags, std::time_t mtime, fs::path const& symlink_path)
+ 	{
+ 		TORRENT_ASSERT(size >= 0);
+ #if BOOST_VERSION < 103600
+@@ -194,6 +194,9 @@
+ 		e.pad_file = bool(flags & pad_file);
+ 		e.hidden_attribute = bool(flags & attribute_hidden);
+ 		e.executable_attribute = bool(flags & attribute_executable);
++		e.symlink_attribute = bool(flags & attribute_symlink);
++		if(e.symlink_attribute)
++			e.symlink_path = symlink_path.string();
+ 		e.mtime = mtime;
+ 		m_total_size += size;
+ 	}
+Index: include/libtorrent/create_torrent.hpp
+===================================================================
+--- include/libtorrent/create_torrent.hpp	(revision 3693)
++++ include/libtorrent/create_torrent.hpp	(working copy)
+@@ -164,6 +164,9 @@
+ 		std::time_t TORRENT_EXPORT get_file_mtime(boost::filesystem::path const& p);
+ 		std::time_t TORRENT_EXPORT get_file_mtime(boost::filesystem::wpath const& p);
+ 
++		fs::path TORRENT_EXPORT get_symlink_path(boost::filesystem::path const& p);
++		fs::path TORRENT_EXPORT get_symlink_path(boost::filesystem::wpath const& p);
++
+ 		template <class Pred, class Str, class PathTraits>
+ 		void add_files_impl(file_storage& fs, boost::filesystem::basic_path<Str, PathTraits> const& p
+ 			, boost::filesystem::basic_path<Str, PathTraits> const& l, Pred pred)
+@@ -191,7 +194,16 @@
+ 			{
+ 				int file_flags = get_file_attributes(f);
+ 				std::time_t mtime = get_file_mtime(f);
+-				fs.add_file(l, file_size(f), file_flags, mtime);
++				//Masking all bits to check if the file is a symlink
++				if(file_flags & file_storage::attribute_symlink) 
++				{
++					fs::path sym_path = get_symlink_path(f);
++					fs.add_file(l, 0 ,file_flags, mtime, sym_path);
++				}
++				else
++				{
++					fs.add_file(l, file_size(f), file_flags, mtime);
++				}
+ 			}
+ 		}
+ 	}
+Index: include/libtorrent/file_storage.hpp
+===================================================================
+--- include/libtorrent/file_storage.hpp	(revision 3693)
++++ include/libtorrent/file_storage.hpp	(working copy)
+@@ -58,7 +58,8 @@
+ 	{
+ 		file_entry(): offset(0), size(0), file_base(0)
+ 			, pad_file(false), hidden_attribute(false)
+-			, executable_attribute(false) {}
++			, executable_attribute(false), symlink_attribute(false)
++			, mtime(0) {}
+ 
+ 		fs::path path;
+ 		size_type offset; // the offset of this file inside the torrent
+@@ -71,6 +72,8 @@
+ 		bool pad_file:1;
+ 		bool hidden_attribute:1;
+ 		bool executable_attribute:1;
++		bool symlink_attribute:1;
++		fs::path symlink_path;
+ 	};
+ 
+ 	struct TORRENT_EXPORT file_slice
+@@ -93,15 +96,16 @@
+ 		{
+ 			pad_file = 1,
+ 			attribute_hidden = 2,
+-			attribute_executable = 4
++			attribute_executable = 4,
++			attribute_symlink = 8
+ 		};
+ 
+ 		void add_file(file_entry const& e);
+-		void add_file(fs::path const& p, size_type size, int flags = 0, std::time_t mtime = 0);
++		void add_file(fs::path const& p, size_type size, int flags = 0, std::time_t mtime = 0, fs::path const& s_p = "");
+ 		void rename_file(int index, std::string const& new_filename);
+ 
+ #ifndef BOOST_FILESYSTEM_NARROW_ONLY
+-		void add_file(fs::wpath const& p, size_type size, int flags = 0, std::time_t mtime = 0);
++		void add_file(fs::wpath const& p, size_type size, int flags = 0, std::time_t mtime = 0, fs::path const& s_p = "");
+ 		void rename_file(int index, std::wstring const& new_filename);
+ 		void set_name(std::wstring const& n);
+ #endif
+Index: examples/dump_torrent.cpp
+===================================================================
+--- examples/dump_torrent.cpp	(revision 3693)
++++ examples/dump_torrent.cpp	(working copy)
+@@ -123,9 +123,13 @@
+ 			<< (i->pad_file?'p':'-')
+ 			<< (i->executable_attribute?'x':'-')
+ 			<< (i->hidden_attribute?'h':'-')
++			<< (i->symlink_attribute?'l':'-')
+ 			<< " "
+-			<< i->path.string() << "[ " << first << ", "
+-			<< last << " ]\n";
++			<< "[ " << std::setw(3) << first << ", " << std::setw(3) << last << " ]\t"
++			<< i->path.string() ;
++		if(i->symlink_attribute)
++			std::cout << " -> " << i->symlink_path.string();
++		std::cout << std::endl;
+ 	}
+ 
+ 	return 0;
