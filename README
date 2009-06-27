@@ -1,8 +1,16 @@
-To run the inital prototype, run runme.sh
-(mini_httpd shows false error like couldn't bind to the address)
-This will run the mini_httpd webserver which is glued with libtorrent-rasterbar
-To successfully compile the program, the requirement is libtorrent-rasterbar which requires boost libraries.
+To run the inital prototype,
+1. Compile and build libtorrent library present in $REPO/libtorrent using 
+	a. cd libtorrent
+	b. ./configure
+	c. make
+2. In the $REPO directory, type make (or make im0)
+3. Finally run runme.sh present in $REPO directory
+	(mini_httpd shows false error like couldn't bind to the address)
 
+This will run the mini_httpd webserver which is glued with libtorrent-rasterbar
+
+The prerequisite is boost libraries which is needed to compile libtorrent.
+ 
 Basic info about mini_httpd
 1. Default port is 8080
 2. default webserver dir is www/ (not /www)
