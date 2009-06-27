@@ -1,6 +1,3 @@
-*.tar
-*.tar.gz
-*.tar.bz2
 *.o
 im0
 .svn

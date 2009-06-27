@@ -1,0 +1,9 @@
+*.lo
+Makefile
+.deps
+.libs
+config.log
+config.status
+libtool
+libtorrent-rasterbar.pc
+libtorrent-rasterbar.la
