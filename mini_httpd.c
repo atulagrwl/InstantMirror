@@ -28,6 +28,7 @@
 #include "port.h"
 #include "match.h"
 #include "tdate_parse.h"
+#include "dump_torrent.h"
 
 #ifdef HAVE_SENDFILE
 # ifdef HAVE_LINUX_SENDFILE
@@ -203,6 +204,9 @@ static char* remoteuser;
 
 
 /* Forwards. */
+
+int tor_list_C (const char* file, torfile_list_C *list[]);
+static char* torrent_full_details( torfile_list_C *dir );
 
 static char* torrent_details( const char* dir );
 int check_file( const char *file );
@@ -1567,7 +1571,9 @@ do_torrent_index( void )
     size_t buflen;
     char* contents;
     size_t contents_size, contents_len;
-    static char** torrent_files;
+    //static char** torrent_files;
+    torfile_list_C *torrent_files_list[1000];
+    int files_no = 0;
 #ifdef HAVE_SCANDIR
     int n, i;
     struct dirent **dl;
@@ -1596,29 +1602,32 @@ do_torrent_index( void )
 <HEAD><TITLE>Index of %s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#99cc99\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
 <H1>Index of %s</H1>\n\
-<PRE>  <a href="">Name</a>                                            <a href="">Last modified</a>      <a href="">Size</a>      <a href="">Description</a><hr>",
+<PRE>  <a href="">Name</a>                                                                     <a href="">Last modified</a>      <a href="">Size</a>      <a href="">Description</a><hr>",
 	file, file );
     add_to_buf( &contents, &contents_size, &contents_len, buf, buflen );
 
 #ifdef HAVE_SCANDIR
 
-	torrent_files=fileList( file );
-	i=0;	
-	while(strcmp(torrent_files[i],"\n")!=0)
+	//torrent_files=fileList( file );
+	files_no = tor_list_C( file, torrent_files_list);
+	//i=0;	
+	//while(strcmp(torrent_files[i],"\n")!=0)
+	for(i = 0 ; i<files_no ; i++)
 	{
 /*		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			"<li>",4);
 */		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
-			torrent_details(torrent_files[i]), strlen(torrent_details(torrent_files[i])));
+			torrent_full_details(torrent_files_list[i]), strlen(torrent_full_details(torrent_files_list[i])));
 /*		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			"</li>",4);
 */
-		i++;
+		//i++;
+		//printf("Loop no = %d\n",i);
 	}
-		
+	//printf("Content is %s\n",contents);	
 		
 
 #else /* HAVE_SCANDIR */
@@ -1794,6 +1803,24 @@ torrent_details( const char* dir )
     return buf;
     }
 
+static char*
+torrent_full_details( torfile_list_C *dir )
+    {
+    static char buf[2000];
+    static char time_buf[18];
+    char space[50] = " ";
+    struct tm *ts;
+    
+    ts = gmtime(&(dir->mtime));
+    (void) strftime( time_buf, 18, "%d-%b-%Y %H:%M", ts);
+
+    (void) snprintf(
+	buf, sizeof( buf ), "<a href=\"%s/\%s\">%-.74s</a>%*s%s  %d\n",
+	file,dir->name,dir->name,(strlen(dir->name)<75)?(75-strlen(dir->name)):0,space,time_buf,
+	dir->size);
+    return buf;
+    }
+	    
 /* Copies and encodes a string. */
 static void
 strencode( char* to, size_t tosize, const char* from )

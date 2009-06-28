@@ -100,6 +100,10 @@ std::vector<torfile_list> tor::gettor(int argc, char* argv)
 			list->name = temp.substr(temp.find('/')+1,temp.size());
 			list->node_s = first;
 			list->node_f = last;
+			list->mtime = i->mtime;
+			list->symlink_attribute = i->symlink_attribute;
+			if(list->symlink_attribute)
+				list->symlink_path = i->symlink_path.string();
 			tor_list.push_back(*list);
 //				std::cout << "  " << std::setw(11) << i->size
 //					<< " " << i->path.string() << "[ " << first << ", "
@@ -133,7 +137,7 @@ char** fileList (const char *a )
 {
 	tor mytor;
 	char **file;
-	char *temp;
+	char *temp = new char[strlen(a)+1];
 	strcpy(temp,a);
 	strcat(temp,".torrent");
 //	printf("%s\n",a);
@@ -151,10 +155,11 @@ char** fileList (const char *a )
 		file[i] = new char[list[i].name.size()+1];
 		strcpy(file[i],list[i].name.c_str());
 	}
-	file[i] = new char[1];
+	file[i] = new char[2];
 	strcpy(file[i],"\n");
 //	strcpy(file[i],"\0");
 //	printf("loop finished\n");
+	delete[] temp;
 	return file;
 }
 
@@ -289,3 +294,37 @@ int getTorrent(const char* path)
 	return 0;
 }
 
+int tor_list_C (const char* a, torfile_list_C* list_C[])
+{
+	printf("Inside tor_list_C function \n");
+	printf("File is %s\n",a);
+	tor mytor;
+	char *temp = new char[strlen(a)+8];
+	strcpy(temp,a);
+	strcat(temp,".torrent");
+	std::vector<torfile_list> list;
+	list = mytor.gettor(2,temp);
+	int i;
+	printf("Before loop in tor_list_C function \n");
+	printf("List size is %d\n",list.size());
+	for(i =0 ;i< list.size(); i++)
+	{
+		list_C[i] = new torfile_list_C;
+		list_C[i]->name = new char[strlen(list[i].name.c_str())+1];
+		strcpy(list_C[i]->name,list[i].name.c_str());
+		list_C[i]->size = list[i].size;
+		list_C[i]->node_s = list[i].node_s;
+		list_C[i]->node_f = list[i].node_f;
+		list_C[i]->mtime = list[i].mtime;
+		if(list[i].symlink_attribute)
+		{
+			list_C[i]->symlink_attribute = 1;
+			list_C[i]->symlink_path = new char[strlen(list[i].symlink_path.c_str())+1];
+			strcpy(list_C[i]->symlink_path,list[i].symlink_path.c_str());
+		}
+		else
+			list_C[i]->symlink_attribute = 0;
+	}
+	printf("After loop in tor_list_C function, return value is %d \n",i);
+	return i;
+}
