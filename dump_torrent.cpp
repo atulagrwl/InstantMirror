@@ -5,6 +5,8 @@
 #include <string>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <utime.h>
 
 #include "libtorrent/entry.hpp"
 #include "libtorrent/bencode.hpp"
@@ -279,6 +281,23 @@ int getTorrent(const char* path)
 			}
 			sleep(5);
 		}
+		
+		//Download finished, setting mtime
+		
+		struct utimbuf timebuf;
+		timebuf.actime = list[index_t].mtime;
+		timebuf.modtime = list[index_t].mtime;
+		
+		if( utime(path,&timebuf) < 0 )
+		{
+			std::cout<<"mtime not set\t Error code is "<<errno<<std::endl;
+			if (errno == ENOENT)
+				std::cout<<"filename does not exist\n Fileanme is "<<path<<std::endl;
+			else if (errno == EACCES)
+				std::cout<<"file permission denied\n";
+		}
+		else
+			std::cout<<"mtime set"<<std::endl;
 
 		// wait for the user to end
 		//char a1;
