@@ -98,6 +98,7 @@ namespace libtorrent
 		, m_socket(s)
 		, m_remote(endp)
 		, m_torrent(tor)
+		, m_receiving_block(-1, -1)
 		, m_outstanding_bytes(0)
 		, m_queued_time_critical(0)
 		, m_num_pieces(0)
@@ -218,6 +219,7 @@ namespace libtorrent
 		, m_disk_recv_buffer(ses, 0)
 		, m_socket(s)
 		, m_remote(endp)
+		, m_receiving_block(-1, -1)
 		, m_outstanding_bytes(0)
 		, m_queued_time_critical(0)
 		, m_num_pieces(0)
@@ -448,6 +450,8 @@ namespace libtorrent
 		}
 
 		int num_allowed_pieces = m_ses.settings().allowed_fast_set_size;
+		if (num_allowed_pieces == 0) return;
+
 		int num_pieces = t->torrent_file().num_pieces();
 
 		if (num_allowed_pieces >= num_pieces)
@@ -1059,12 +1063,17 @@ namespace libtorrent
 			piece_block b = i->block;
 			bool remove_from_picker = !i->timed_out && !i->not_wanted;
 			m_download_queue.erase(i);
+			TORRENT_ASSERT(m_outstanding_bytes >= r.length);
 			m_outstanding_bytes -= r.length;
+			if (m_outstanding_bytes < 0) m_outstanding_bytes = 0;
 			
 			// if the peer is in parole mode, keep the request
 			if (peer_info_struct() && peer_info_struct()->on_parole)
 			{
-				m_request_queue.insert(m_request_queue.begin(), b);
+				// we should only add it if the block is marked as
+				// busy in the piece-picker
+				if (remove_from_picker)
+					m_request_queue.insert(m_request_queue.begin(), b);
 			}
 			else if (!t->is_seed() && remove_from_picker)
 			{
@@ -1707,7 +1716,9 @@ namespace libtorrent
 	void peer_connection::incoming_piece_fragment(int bytes)
 	{
 		m_last_piece = time_now();
+		TORRENT_ASSERT(m_outstanding_bytes >= bytes);
 		m_outstanding_bytes -= bytes;
+		if (m_outstanding_bytes < 0) m_outstanding_bytes = 0;
 #ifdef TORRENT_DEBUG
 		boost::shared_ptr<torrent> t = associated_torrent().lock();
 		TORRENT_ASSERT(m_received_in_piece + bytes <= t->block_size());
@@ -1732,6 +1743,7 @@ namespace libtorrent
 		boost::shared_ptr<torrent> t = associated_torrent().lock();
 		TORRENT_ASSERT(t);
 		piece_block b(r.piece, r.start / t->block_size());
+		m_receiving_block = b;
 
 		if (!verify_piece(r))
 		{
@@ -1829,6 +1841,10 @@ namespace libtorrent
 
 		TORRENT_ASSERT(!m_disk_recv_buffer);
 		TORRENT_ASSERT(m_disk_recv_buffer_size == 0);
+
+		// we're not receiving any block right now
+		m_receiving_block.piece_index = -1;
+		m_receiving_block.block_index = -1;
 
 #ifdef TORRENT_CORRUPT_DATA
 		// corrupt all pieces from certain peers
@@ -1973,7 +1989,9 @@ namespace libtorrent
 				m_download_queue.erase(m_download_queue.begin() + i);
 				--i;
 				--block_index;
+				TORRENT_ASSERT(m_outstanding_bytes >= t->block_size());
 				m_outstanding_bytes -= t->block_size();
+				if (m_outstanding_bytes < 0) m_outstanding_bytes = 0;
 				TORRENT_ASSERT(m_download_queue[block_index] == pending_b);
 #if !defined TORRENT_DISABLE_INVARIANT_CHECKS && defined TORRENT_DEBUG
 				check_invariant();
@@ -2468,6 +2486,9 @@ namespace libtorrent
 			TORRENT_ASSERT(block_size > 0);
 			TORRENT_ASSERT(block_size <= t->block_size());
 
+			// we can't cancel the piece if we've started receiving it
+			if (m_receiving_block == b) continue;
+
 			peer_request r;
 			r.piece = b.piece_index;
 			r.start = block_offset;
@@ -2526,6 +2547,8 @@ namespace libtorrent
 			t->block_size());
 		TORRENT_ASSERT(block_size > 0);
 		TORRENT_ASSERT(block_size <= t->block_size());
+
+		if (m_outstanding_bytes < block_size) return;
 
 		peer_request r;
 		r.piece = block.piece_index;

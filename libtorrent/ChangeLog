@@ -1,3 +1,6 @@
+	* added new alert when individual files complete
+	* added support for storing symbolic links in .torrent files
+	* added support for uTorrent interpretation of multi-tracker torrents
 	* handle torrents with duplicate filenames
 	* piece timeouts are adjusted to download rate limits
 	* encodes urls in torrent files that needs to be encoded
@@ -71,6 +74,11 @@ release 0.14.5
 	* allow 0 upload slots
 	* fixed bug in rename_file(). The new name would not always be saved in
 	  the resume data
+	* fixed resume data compatibility with 0.13
+	* fixed rare piece-picker bug
+	* fixed bug where one allowed-fast message would be sent even when
+	  disabled
+	* fixed race condition in UPnP which could lead to crash
 
 release 0.14.4
 

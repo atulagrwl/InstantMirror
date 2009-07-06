@@ -1817,7 +1817,7 @@ Its declaration looks like this::
 		torrent_handle();
 
 		torrent_status status();
-		void file_progress(std::vector<size_type>& fp);
+		void file_progress(std::vector<size_type>& fp, int flags = 0);
 		void get_download_queue(std::vector<partial_piece_info>& queue) const;
 		void get_peer_info(std::vector<peer_info>& v) const;
 		torrent_info const& get_torrent_info() const;
@@ -2029,13 +2029,21 @@ file_progress()
 
 	::
 
-		void file_progress(std::vector<size_type>& fp);
+		void file_progress(std::vector<size_type>& fp, int flags = 0);
 
 This function fills in the supplied vector with the the number of bytes downloaded
 of each file in this torrent. The progress values are ordered the same as the files
 in the `torrent_info`_. This operation is not very cheap. Its complexity is *O(n + mj)*.
 Where *n* is the number of files, *m* is the number of downloading pieces and *j*
 is the number of blocks in a piece.
+
+The ``flags`` parameter can be used to specify the granularity of the file progress. If
+left at the default value of 0, the progress will be as accurate as possible, but also
+more expensive to calculate. If ``torrent_handle::piece_granularity`` is specified,
+the progress will be specified in piece granularity. i.e. only pieces that have been
+fully downloaded and passed the hash check count. When specifying piece granularity,
+the operation is a lot cheaper, since libtorrent already keeps track of this internally
+and no calculation is required.
 
 
 save_path()
@@ -3486,6 +3494,8 @@ session_settings
 		bool rate_limit_ip_overhead;
 
 		bool announce_to_all_trackers;
+		bool announce_to_all_tiers;
+
 		bool prefer_udp_trackers;
 		bool strict_super_seeding;
 
@@ -3837,10 +3847,14 @@ drained from the rate limiters, to avoid exceeding the limits with the total tra
 ``announce_to_all_trackers`` controls how multi tracker torrents are
 treated. If this is set to true, all trackers in the same tier are
 announced to in parallel. If all trackers in tier 0 fails, all trackers
-in tier 1 are announced as well. This is the uTorrent behavior. If it's
-set to false, the behavior is as defined by the multi tracker
-specification. It defaults to false, which is the same behavior previous
-versions of libtorrent has had as well.
+in tier 1 are announced as well. If it's set to false, the behavior is as
+defined by the multi tracker specification. It defaults to false, which
+is the same behavior previous versions of libtorrent has had as well.
+
+``announce_to_all_tiers`` also controls how multi tracker torrents are
+treated. When this is set to true, one tracker from each tier is announced
+to. This is the uTorrent behavior. This is false by default in order
+to comply with the multi-tracker specification.
 
 ``prefer_udp_trackers`` is true by default. It means that trackers may
 be rearranged in a way that udp trackers are always tried before http
@@ -4773,7 +4787,7 @@ generated and the torrent is paused.
 	};
 
 file_renamed_alert
-------------------------
+------------------
 
 This is posted as a response to a ``torrent_handle::rename_file`` call, if the rename
 operation succeeds.
@@ -5144,6 +5158,23 @@ This alert is generated when a block request receives a response.
 		int block_index;
 		int piece_index;
 	};
+
+
+file_completed_alert
+--------------------
+
+This is posted whenever an individual file completes its download. i.e.
+All pieces overlapping this file have passed their hash check.
+
+::
+
+	struct file_completed_alert: torrent_alert
+	{
+		// ...
+		int index;
+	};
+
+The ``index`` member refers to the index of the file that completed.
 
 
 block_downloading_alert
@@ -5730,7 +5761,13 @@ code   symbol                                    description
 106    invalid_pex_message                       The peer sent an invalid peer exchange message
 ------ ----------------------------------------- -----------------------------------------------------------------
 107    invalid_lt_tracker_message                The peer sent an invalid tracker exchange message
------- ----------------------------------------- -----------------------------------------------------------------
+====== ========================================= =================================================================
+
+NAT-PMP errors:
+
+====== ========================================= =================================================================
+code   symbol                                    description
+====== ========================================= =================================================================
 108    unsupported_protocol_version              The NAT-PMP router responded with an unsupported protocol version
 ------ ----------------------------------------- -----------------------------------------------------------------
 109    natpmp_not_authorized                     You are not authorized to map ports on this NAT-PMP router
@@ -5740,6 +5777,45 @@ code   symbol                                    description
 111    no_resources                              The NAT-PMP router failed because of lack of resources
 ------ ----------------------------------------- -----------------------------------------------------------------
 112    unsupported_opcode                        The NAT-PMP router failed because an unsupported opcode was sent
+====== ========================================= =================================================================
+
+fastresume data errors:
+
+====== ========================================= =================================================================
+code   symbol                                    description
+====== ========================================= =================================================================
+113    missing_file_sizes                        The resume data file is missing the 'file sizes' entry
+------ ----------------------------------------- -----------------------------------------------------------------
+114    no_files_in_resume_data                   The resume data file 'file sizes' entry is empty
+------ ----------------------------------------- -----------------------------------------------------------------
+115    missing_pieces                            The resume data file is missing the 'pieces' and 'slots' entry
+------ ----------------------------------------- -----------------------------------------------------------------
+116    mismatching_number_of_files               The number of files in the resume data does not match the number
+                                                 of files in the torrent
+------ ----------------------------------------- -----------------------------------------------------------------
+117    mismatching_files_size                    One of the files on disk has a different size than in the fast
+                                                 resume file
+------ ----------------------------------------- -----------------------------------------------------------------
+118    mismatching_file_timestamp                One of the files on disk has a different timestamp than in the
+                                                 fast resume file
+------ ----------------------------------------- -----------------------------------------------------------------
+119    not_a_dictionary                          The resume data file is not a dictionary
+------ ----------------------------------------- -----------------------------------------------------------------
+120    invalid_blocks_per_piece                  The 'blocks per piece' entry is invalid in the resume data file
+------ ----------------------------------------- -----------------------------------------------------------------
+121    missing_slots                             The resume file is missing the 'slots' entry, which is required
+                                                 for torrents with compact allocation
+------ ----------------------------------------- -----------------------------------------------------------------
+122    too_many_slots                            The resume file contains more slots than the torrent
+------ ----------------------------------------- -----------------------------------------------------------------
+123    invalid_slot_list                         The 'slot' entry is invalid in the resume data
+------ ----------------------------------------- -----------------------------------------------------------------
+124    invalid_piece_index                       One index in the 'slot' list is invalid
+------ ----------------------------------------- -----------------------------------------------------------------
+125    pieces_need_reorder                       The pieces on disk needs to be re-ordered for the specified
+                                                 allocation mode. This happens if you specify sparse allocation
+                                                 and the files on disk are using compact storage. The pieces needs
+                                                 to be moved to their right position
 ====== ========================================= =================================================================
 
 The names of these error codes are declared in then ``libtorrent::errors`` namespace.
@@ -5862,7 +5938,7 @@ The interface looks like this::
 		virtual int writev(file::iovec_t const* bufs, int slot, int offset, int num_bufs) = 0;
 		virtual int sparse_end(int start) const;
 		virtual bool move_storage(fs::path save_path) = 0;
-		virtual bool verify_resume_data(lazy_entry const& rd, std::string& error) = 0;
+		virtual bool verify_resume_data(lazy_entry const& rd, error_code& error) = 0;
 		virtual bool write_resume_data(entry& rd) const = 0;
 		virtual bool move_slot(int src_slot, int dst_slot) = 0;
 		virtual bool swap_slots(int slot1, int slot2) = 0;
@@ -5970,7 +6046,7 @@ verify_resume_data()
 
 	::
 
-		bool verify_resume_data(lazy_entry const& rd, std::string& error) = 0;
+		bool verify_resume_data(lazy_entry const& rd, error_code& error) = 0;
 
 This function should verify the resume data ``rd`` with the files
 on disk. If the resume data seems to be up-to-date, return true. If
@@ -5978,7 +6054,7 @@ not, set ``error`` to a description of what mismatched and return false.
 
 The default storage may compare file sizes and time stamps of the files.
 
-Returning ``true`` indicates an error occurred.
+Returning ``false`` indicates an error occurred.
 
 
 write_resume_data()

@@ -76,7 +76,8 @@ namespace libtorrent
 		m_files[index].path = utf8;
 	}
 
-	void file_storage::add_file(fs::wpath const& file, size_type size, int flags, std::time_t mtime, fs::path const& symlink_path)
+	void file_storage::add_file(fs::wpath const& file, size_type size, int flags
+		, std::time_t mtime, fs::path const& symlink_path)
 	{
 		std::string utf8;
 		wchar_utf8(file.string(), utf8);
@@ -90,24 +91,27 @@ namespace libtorrent
 		m_files[index].path = new_filename;
 	}
 
-	file_storage::iterator file_storage::file_at_offset(size_type offset) const
-	{
-		// TODO: do a binary search
-		std::vector<file_entry>::const_iterator i;
-		for (i = begin(); i != end(); ++i)
-		{
-			if (i->offset <= offset && i->offset + i->size > offset)
-				return i;
-		}
-		return i;
-	}
-
 	namespace
 	{
 		bool compare_file_offset(file_entry const& lhs, file_entry const& rhs)
 		{
 			return lhs.offset < rhs.offset;
 		}
+	}
+
+	file_storage::iterator file_storage::file_at_offset(size_type offset) const
+	{
+		// find the file iterator and file offset
+		file_entry target;
+		target.offset = offset;
+		TORRENT_ASSERT(!compare_file_offset(target, m_files.front()));
+
+		std::vector<file_entry>::const_iterator file_iter = std::upper_bound(
+			begin(), end(), target, compare_file_offset);
+
+		TORRENT_ASSERT(file_iter != begin());
+		--file_iter;
+		return file_iter;
 	}
 
 	std::vector<file_slice> file_storage::map_block(int piece, size_type offset
@@ -164,7 +168,8 @@ namespace libtorrent
 		return ret;
 	}
 
-	void file_storage::add_file(fs::path const& file, size_type size, int flags, std::time_t mtime, fs::path const& symlink_path)
+	void file_storage::add_file(fs::path const& file, size_type size, int flags
+		, std::time_t mtime, fs::path const& symlink_path)
 	{
 		TORRENT_ASSERT(size >= 0);
 #if BOOST_VERSION < 103600
@@ -195,8 +200,7 @@ namespace libtorrent
 		e.hidden_attribute = bool(flags & attribute_hidden);
 		e.executable_attribute = bool(flags & attribute_executable);
 		e.symlink_attribute = bool(flags & attribute_symlink);
-		if(e.symlink_attribute)
-			e.symlink_path = symlink_path.string();
+		if (e.symlink_attribute) e.symlink_path = symlink_path.string();
 		e.mtime = mtime;
 		m_total_size += size;
 	}

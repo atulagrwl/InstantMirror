@@ -98,7 +98,7 @@ namespace libtorrent
 			int file_attr = 0;
 			if (s.st_mode & S_IXUSR) 
 				file_attr += file_storage::attribute_executable;
-			if(S_ISLNK(s.st_mode))
+			if (S_ISLNK(s.st_mode))
 				file_attr += file_storage::attribute_symlink;
 			return file_attr;
 #endif
@@ -145,18 +145,12 @@ namespace libtorrent
 
 		boost::filesystem::path get_symlink_path(char const* path)
 		{
-			int char_read = 0;
-			char *buf = new char[MAX_SYMLINK_PATH];
-			if( (char_read = readlink(path,buf,MAX_SYMLINK_PATH)) < 0)
-				return 0;
-			if(char_read < MAX_SYMLINK_PATH)
-				buf[char_read] = '\0';
-			else
-				buf[0] = '\0';
-			boost::filesystem::path symlink_pt (buf);
-			if(buf != 0)
-				delete(buf);
-			return symlink_pt;
+			char buf[MAX_SYMLINK_PATH];
+			int char_read = readlink(path,buf,MAX_SYMLINK_PATH);
+			if (char_read < 0) return "";
+			if (char_read < MAX_SYMLINK_PATH) buf[char_read] = 0;
+			else buf[0] = 0;
+			return buf;
 		}
 
 		boost::filesystem::path TORRENT_EXPORT get_symlink_path(boost::filesystem::path const& p)

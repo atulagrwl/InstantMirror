@@ -247,6 +247,8 @@ void upnp::resend_request(error_code const& e)
 {
 	if (e) return;
 
+	boost::intrusive_ptr<upnp> me(self());
+
 	mutex_t::scoped_lock l(m_mutex);
 
 	if (m_closing) return;
@@ -303,6 +305,8 @@ void upnp::resend_request(error_code const& e)
 void upnp::on_reply(udp::endpoint const& from, char* buffer
 	, std::size_t bytes_transferred)
 {
+	boost::intrusive_ptr<upnp> me(self());
+
 	mutex_t::scoped_lock l(m_mutex);
 
 	using namespace libtorrent::detail;
@@ -582,7 +586,7 @@ void upnp::post(upnp::rootdevice const& d, char const* soap
 
 	d.upnp_connection->sendbuffer = header;
 
-	char msg[400];
+	char msg[1024];
 	snprintf(msg, sizeof(msg), "sending: %s", header);
 	log(msg, l);
 }
@@ -652,6 +656,8 @@ void upnp::update_map(rootdevice& d, int i, mutex_t::scoped_lock& l)
 	TORRENT_ASSERT(d.mapping.size() == m_mappings.size());
 
 	if (d.upnp_connection) return;
+
+	boost::intrusive_ptr<upnp> me(self());
 
 	mapping_t& m = d.mapping[i];
 
@@ -825,6 +831,8 @@ void upnp::on_upnp_xml(error_code const& e
 	, libtorrent::http_parser const& p, rootdevice& d
 	, http_connection& c)
 {
+	boost::intrusive_ptr<upnp> me(self());
+
 	mutex_t::scoped_lock l(m_mutex);
 
 	TORRENT_ASSERT(d.magic == 1337);
@@ -1056,6 +1064,8 @@ void upnp::on_upnp_map_response(error_code const& e
 	, libtorrent::http_parser const& p, rootdevice& d, int mapping
 	, http_connection& c)
 {
+	boost::intrusive_ptr<upnp> me(self());
+
 	mutex_t::scoped_lock l(m_mutex);
 
 	TORRENT_ASSERT(d.magic == 1337);
@@ -1212,6 +1222,8 @@ void upnp::on_upnp_unmap_response(error_code const& e
 	, libtorrent::http_parser const& p, rootdevice& d, int mapping
 	, http_connection& c)
 {
+	boost::intrusive_ptr<upnp> me(self());
+
 	mutex_t::scoped_lock l(m_mutex);
 
 	TORRENT_ASSERT(d.magic == 1337);
@@ -1224,7 +1236,7 @@ void upnp::on_upnp_unmap_response(error_code const& e
 	if (e && e != asio::error::eof)
 	{
 		char msg[200];
-		snprintf(msg, sizeof(msg), "error while deleing portmap: %s", e.message().c_str());
+		snprintf(msg, sizeof(msg), "error while deleting portmap: %s", e.message().c_str());
 		log(msg, l);
 	}
 	else if (!p.header_finished())
@@ -1234,7 +1246,7 @@ void upnp::on_upnp_unmap_response(error_code const& e
 	else if (p.status_code() != 200)
 	{
 		char msg[200];
-		snprintf(msg, sizeof(msg), "error while deleing portmap: %s", p.message().c_str());
+		snprintf(msg, sizeof(msg), "error while deleting portmap: %s", p.message().c_str());
 		log(msg, l);
 	}
 	else

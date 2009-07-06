@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
 			<< " "
 			<< "[ " << std::setw(3) << first << ", " << std::setw(3) << last << " ]\t"
 			<< i->path.string() ;
-		if(i->symlink_attribute)
+		if (i->symlink_attribute)
 			std::cout << " -> " << i->symlink_path.string();
 		std::cout << std::endl;
 	}

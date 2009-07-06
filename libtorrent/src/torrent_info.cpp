@@ -661,16 +661,16 @@ namespace libtorrent
 				}
 			}
 
-                	lazy_entry const* s_p = info.dict_find("symlink path");
-	                if (s_p != 0 && s_p->type() == lazy_entry::list_t)
-	                {
-	                        for (int i = 0, end(s_p->list_size()); i < end; ++i)
-        	                {
-                	                std::string path_element = s_p->list_at(i)->string_value();
-                        	        trim_path_element(path_element);
-                                	e.symlink_path /= path_element;
-	                        }
-	                }
+			lazy_entry const* s_p = info.dict_find("symlink path");
+			if (s_p != 0 && s_p->type() == lazy_entry::list_t)
+			{
+				for (int i = 0, end(s_p->list_size()); i < end; ++i)
+				{
+					std::string path_element = s_p->list_at(i)->string_value();
+					trim_path_element(path_element);
+					e.symlink_path /= path_element;
+				}
+			}
 			// bitcomet pad file
 			if (e.path.string().find("_____padding_file_") != std::string::npos)
 				e.pad_file = true;

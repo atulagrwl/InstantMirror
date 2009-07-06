@@ -238,6 +238,7 @@ namespace libtorrent
 		if (!m_seed_mode)
 		{
 			m_picker.reset(new piece_picker());
+			std::fill(m_file_progress.begin(), m_file_progress.end(), 0);
 
 			if (!m_resume_data.empty())
 			{
@@ -599,6 +600,7 @@ namespace libtorrent
 		TORRENT_ASSERT(m_torrent_file->total_size() >= 0);
 
 		m_file_priority.resize(m_torrent_file->num_files(), 1);
+		m_file_progress.resize(m_torrent_file->num_files(), 0);
 
 		m_block_size = (std::min)(m_block_size, m_torrent_file->piece_length());
 
@@ -805,9 +807,7 @@ namespace libtorrent
 			}
 		}
 
-		bool fastresume_rejected = !j.str.empty();
-		
-		if (fastresume_rejected && m_ses.m_alerts.should_post<fastresume_rejected_alert>())
+		if (j.error && m_ses.m_alerts.should_post<fastresume_rejected_alert>())
 		{
 			m_ses.m_alerts.post_alert(fastresume_rejected_alert(get_handle(), j.error));
 		}
@@ -822,7 +822,7 @@ namespace libtorrent
 			// there are either no files for this torrent
 			// or the resume_data was accepted
 
-			if (!fastresume_rejected && m_resume_entry.type() == lazy_entry::dict_t)
+			if (!j.error && m_resume_entry.type() == lazy_entry::dict_t)
 			{
 				// parse have bitmask
 				lazy_entry const* pieces = m_resume_entry.dict_find("pieces");
@@ -832,8 +832,20 @@ namespace libtorrent
 					char const* pieces_str = pieces->string_ptr();
 					for (int i = 0, end(pieces->string_length()); i < end; ++i)
 					{
-						if (pieces_str[i] & 1) m_picker->we_have(i);
+						if (pieces_str[i] & 1) we_have(i);
 						if (m_seed_mode && (pieces_str[i] & 2)) m_verified.set_bit(i);
+					}
+				}
+				else
+				{
+					lazy_entry const* slots = m_resume_entry.dict_find("slots");
+					if (slots && slots->type() == lazy_entry::list_t)
+					{
+						for (int i = 0; i < slots->list_size(); ++i)
+						{
+							int piece = slots->list_int_value_at(i, -1);
+							if (piece >= 0) we_have(piece);
+						}
 					}
 				}
 
@@ -921,6 +933,7 @@ namespace libtorrent
 
 		m_owning_storage->async_release_files();
 		if (!m_picker) m_picker.reset(new piece_picker());
+		std::fill(m_file_progress.begin(), m_file_progress.end(), 0);
 		m_picker->init(m_torrent_file->piece_length() / m_block_size
 			, int((m_torrent_file->total_size()+m_block_size-1)/m_block_size));
 		// assume that we don't have anything
@@ -1004,7 +1017,7 @@ namespace libtorrent
 
 		TORRENT_ASSERT(m_picker);
 		if (j.offset >= 0 && !m_picker->have_piece(j.offset))
-			m_picker->we_have(j.offset);
+			we_have(j.offset);
 
 		// we're not done checking yet
 		// this handler will be called repeatedly until
@@ -1147,15 +1160,35 @@ namespace libtorrent
 
 		ptime now = time_now();
 
+		// the tier is kept as INT_MAX until we find the first
+		// tracker that works, then it's set to that tracker's
+		// tier.
 		int tier = INT_MAX;
+
+		// have we sent an announce in this tier yet?
+		bool sent_announce = false;
+
 		for (int i = 0; i < int(m_trackers.size()); ++i)
 		{
 			announce_entry& ae = m_trackers[i];
-			if (ae.tier > tier) break;
-			if (ae.is_working()) tier = ae.tier;
+			if (m_settings.announce_to_all_tiers
+				&& sent_announce
+				&& ae.tier <= tier
+				&& tier != INT_MAX)
+				continue;
+
+			if (ae.tier > tier && !m_settings.announce_to_all_tiers) break;
+			if (ae.is_working()) { tier = ae.tier; sent_announce = false; }
 			if (!ae.can_announce(now))
 			{
-				if (ae.is_working() && !m_settings.announce_to_all_trackers) break;
+				if (ae.is_working())
+				{
+					sent_announce = true; // this counts
+
+					if (!m_settings.announce_to_all_trackers
+						&& !m_settings.announce_to_all_tiers)
+						break;
+				}
 				continue;
 			}
 			
@@ -1193,7 +1226,11 @@ namespace libtorrent
 					tracker_announce_alert(get_handle(), req.url, req.event));
 			}
 
-			if (ae.is_working() && !m_settings.announce_to_all_trackers) break;
+			sent_announce = true;
+			if (ae.is_working()
+				&& !m_settings.announce_to_all_trackers
+				&& !m_settings.announce_to_all_tiers)
+				break;
 		}
 		update_tracker_timer();
 	}
@@ -1755,6 +1792,45 @@ namespace libtorrent
 			m_picker->set_piece_priority(i, 6);
 	}
 
+	void torrent::we_have(int index)
+	{
+		// update m_file_progress
+		TORRENT_ASSERT(m_picker);
+		TORRENT_ASSERT(!have_piece(index));
+
+		const int piece_size = m_torrent_file->piece_length();
+		size_type off = size_type(index) * piece_size;
+		file_storage::iterator f = m_torrent_file->files().file_at_offset(off);
+		int size = m_torrent_file->piece_size(index);
+		int file_index = f - m_torrent_file->files().begin();
+		for (; size > 0; ++f, ++file_index)
+		{
+			size_type file_offset = off - f->offset;
+			TORRENT_ASSERT(f != m_torrent_file->files().end());
+			TORRENT_ASSERT(file_offset < f->size);
+			int add = (std::min)(f->size - file_offset, (size_type)size);
+			m_file_progress[file_index] += add;
+
+			TORRENT_ASSERT(m_file_progress[file_index]
+				<= m_torrent_file->files().at(file_index).size);
+
+			if (m_file_progress[file_index] >= m_torrent_file->files().at(file_index).size)
+			{
+				if (m_ses.m_alerts.should_post<piece_finished_alert>())
+				{
+					// this file just completed, post alert
+					m_ses.m_alerts.post_alert(file_completed_alert(get_handle()
+						, file_index));
+				}
+			}
+			size -= add;
+			off += add;
+			TORRENT_ASSERT(size >= 0);
+		}
+
+		m_picker->we_have(index);
+	}
+
 	void torrent::piece_passed(int index)
 	{
 //		INVARIANT_CHECK;
@@ -1781,7 +1857,8 @@ namespace libtorrent
 		std::set<void*> peers;
 		std::copy(downloaders.begin(), downloaders.end(), std::inserter(peers, peers.begin()));
 
-		m_picker->we_have(index);
+		we_have(index);
+
 		for (peer_iterator i = m_connections.begin(); i != m_connections.end();)
 		{
 			peer_connection* p = *i;
@@ -3312,6 +3389,7 @@ namespace libtorrent
 		using namespace libtorrent::detail; // for write_*_endpoint()
 		ret["file-format"] = "libtorrent resume file";
 		ret["file-version"] = 1;
+		ret["libtorrent-version"] = LIBTORRENT_VERSION;
 
 		ret["total_uploaded"] = m_total_uploaded;
 		ret["total_downloaded"] = m_total_downloaded;
@@ -4419,6 +4497,14 @@ namespace libtorrent
 			TORRENT_ASSERT((m_torrent_file->piece_length() & (m_block_size-1)) == 0);
 		}
 //		if (is_seed()) TORRENT_ASSERT(m_picker.get() == 0);
+
+
+		for (std::vector<size_type>::const_iterator i = m_file_progress.begin()
+			, end(m_file_progress.end()); i != end; ++i)
+		{
+			int index = i - m_file_progress.begin();
+			TORRENT_ASSERT(*i <= m_torrent_file->files().at(index).size);
+		}
 	}
 #endif
 
@@ -4843,15 +4929,29 @@ namespace libtorrent
 
 		ptime next_announce = max_time();
 		int tier = INT_MAX;
+
+		bool found_working = false;
+
 		for (std::vector<announce_entry>::iterator i = m_trackers.begin()
 			, end(m_trackers.end()); i != end; ++i)
 		{
-			if (i->tier > tier) break;
-			if (i->is_working()) tier = i->tier;
+			if (m_settings.announce_to_all_tiers
+				&& found_working
+				&& i->tier <= tier
+				&& tier != INT_MAX)
+				continue;
+
+			if (i->tier > tier && !m_settings.announce_to_all_tiers) break;
+			if (i->is_working()) { tier = i->tier; found_working = false; }
 			if (i->fails >= i->fail_limit && i->fail_limit != 0) continue;
-			if (i->updating) continue;
+			if (i->updating) { found_working = true; continue; }
 			if (i->next_announce < next_announce) next_announce = i->next_announce;
-			if (i->is_working() && !m_settings.announce_to_all_trackers) break;
+			if (i->is_working())
+			{
+				found_working = true;
+				if (!m_settings.announce_to_all_trackers
+					&& !m_settings.announce_to_all_tiers) break;
+			}
 		}
 		if (next_announce == max_time()) return;
 
@@ -5284,11 +5384,17 @@ namespace libtorrent
 		}
 	}
 
-	void torrent::file_progress(std::vector<size_type>& fp) const
+	void torrent::file_progress(std::vector<size_type>& fp, int flags) const
 	{
 		TORRENT_ASSERT(valid_metadata());
 	
 		fp.resize(m_torrent_file->num_files(), 0);
+
+		if (flags & torrent_handle::piece_granularity)
+		{
+			std::copy(m_file_progress.begin(), m_file_progress.end(), fp.begin());
+			return;
+		}
 
 		if (is_seed())
 		{
