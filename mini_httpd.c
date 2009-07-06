@@ -1572,7 +1572,7 @@ do_torrent_index( void )
     char* contents;
     size_t contents_size, contents_len;
     //static char** torrent_files;
-    torfile_list_C *torrent_files_list[1000];
+    torfile_list_C *torrent_files_list[10000];
     int files_no = 0;
 #ifdef HAVE_SCANDIR
     int n, i;
@@ -1617,7 +1617,8 @@ do_torrent_index( void )
 /*		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			"<li>",4);
-*/		add_to_buf(
+*///		printf("Iteration no %d of %d\n",i, files_no);
+		add_to_buf(
 		    &contents, &contents_size, &contents_len, 
 			torrent_full_details(torrent_files_list[i]), strlen(torrent_full_details(torrent_files_list[i])));
 /*		add_to_buf(
@@ -1627,7 +1628,7 @@ do_torrent_index( void )
 		//i++;
 		//printf("Loop no = %d\n",i);
 	}
-	//printf("Content is %s\n",contents);	
+//	printf("Content is %s\n",contents);	
 		
 
 #else /* HAVE_SCANDIR */
@@ -1808,7 +1809,8 @@ torrent_full_details( torfile_list_C *dir )
     {
     static char buf[2000];
     static char time_buf[18];
-    char space[50] = " ";
+    static int count = 0;
+    static char space[50] = " ";
     struct tm *ts;
     
     ts = gmtime(&(dir->mtime));
@@ -1818,6 +1820,7 @@ torrent_full_details( torfile_list_C *dir )
 	buf, sizeof( buf ), "<a href=\"%s/\%s\">%-.74s</a>%*s%s  %d\n",
 	file,dir->name,dir->name,(strlen(dir->name)<75)?(75-strlen(dir->name)):0,space,time_buf,
 	dir->size);
+	//printf("Serial no: %d, %s\n",count++,buf);
     return buf;
     }
 	    
@@ -2842,6 +2845,7 @@ my_sendfile( int fd, int socket, off_t offset, size_t nbytes )
 static void
 add_to_buf( char** bufP, size_t* bufsizeP, size_t* buflenP, char* str, size_t len )
     {
+//	    printf("XX Size %d\n",*buflenP);
     if ( *bufsizeP == 0 )
 	{
 	*bufsizeP = len + 500;
@@ -2856,6 +2860,7 @@ add_to_buf( char** bufP, size_t* bufsizeP, size_t* buflenP, char* str, size_t le
     (void) memmove( &((*bufP)[*buflenP]), str, len );
     *buflenP += len;
     (*bufP)[*buflenP] = '\0';
+//		printf("YY Size %d\n",*buflenP);
     }
 
 

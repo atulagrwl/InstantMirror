@@ -195,7 +195,7 @@ int check ( const std::string torrent_name, const std::string path_tmp)
 	std::cout<<"File Name :"<<path_tmp<<std::endl;	
 	for(int i =0; i< list.size(); i++)
 	{
-		std::cout<<"List ["<<i<<"] = "<<list[i].name<<std::endl;
+//		std::cout<<"List ["<<i<<"] = "<<list[i].name<<std::endl;
 
 		if(list[i].name == path_tmp)
 		{
@@ -242,6 +242,31 @@ int getTorrent(const char* path)
 		for(int i = 0; i<list.size(); i++)
 			priorities_files.push_back(0);
 		priorities_files[index_t]=1;
+		
+		if(list[index_t].symlink_attribute)
+		{
+			printf("Index is %d\n",index_t);
+			std::string sym_path(path);
+			sym_path += "/" + list[index_t].symlink_path;
+			int index_sym = sym_path.find("../");
+			while (index_sym != -1)
+			{
+				std::cout << "Total link is "<<sym_path<<std::endl;
+				int indx = sym_path.rfind("/",index_sym-2);
+				indx = sym_path.rfind("/",indx-1);
+				if (indx == -1)
+				{
+					
+					printf("wrong symlink path\n");
+					break;
+				}
+				sym_path = sym_path.substr(0,indx+1) + sym_path.substr(index_sym+3);
+				index_sym = sym_path.find("../");
+				std::cout<<"Next resolution is "<<sym_path<<"\n";
+			}
+			getTorrent(sym_path.c_str());
+			
+		}
 		
 		std::cout << "2. Torrent Name :"<<torrent_name<<"\t Torrent File :"<<torrent_file_name<<"\t Index No :"<<index_t<<std::endl;	
 
