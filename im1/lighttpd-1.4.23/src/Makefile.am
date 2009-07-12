@@ -144,6 +144,11 @@ mod_scgi_la_SOURCES = mod_scgi.c
 mod_scgi_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_scgi_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_instantmirror.la
+mod_instantmirror_la_SOURCES = mod_instantmirror.c
+mod_instantmirror_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_instantmirror_la_LIBADD = $(common_libadd)
+
 lib_LTLIBRARIES += mod_staticfile.la
 mod_staticfile_la_SOURCES = mod_staticfile.c
 mod_staticfile_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
