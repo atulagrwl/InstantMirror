@@ -8909,6 +8909,10 @@ _lt_linker_boilerplate=`cat conftest.err`
 $RM -r conftest*
 
 
+## CAVEAT EMPTOR:
+## There is no encapsulation within the following macros, do not change
+## the running order or otherwise move them around unless you know exactly
+## what you are doing...
 if test -n "$compiler"; then
   
 lt_prog_compiler_no_builtin_flag=
@@ -19496,7 +19500,9 @@ else
 fi
 
 
-COMPILETIME_OPTIONS=""
+# this works around a bug in asio in boost-1.39
+COMPILETIME_OPTIONS="-DBOOST_ASIO_HASH_MAP_BUCKETS=1024"
+
 { $as_echo "$as_me:$LINENO: checking what form of logging to use" >&5
 $as_echo_n "checking what form of logging to use... " >&6; }
 case "$logging" in
