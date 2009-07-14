@@ -44,13 +44,17 @@ typedef struct {
 } plugin_data;
 
 typedef struct {
-	size_t foo;
+	enum { REWRITE_STATE_UNSET, REWRITE_STATE_FINISHED} state;
+	int loops;
 } handler_ctx;
 
 static handler_ctx * handler_ctx_init() {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
+	
+	hctx->state = REWRITE_STATE_UNSET;
+	hctx->loops = 0;
 
 	return hctx;
 }
@@ -164,12 +168,38 @@ static int mod_instantmirror_patch_connection(server *srv, connection *con, plug
 }
 #undef PATCH
 
+URIHANDLER_FUNC(mod_rewrite_con_reset) {
+	plugin_data *p = p_d;
+
+	UNUSED(srv);
+
+	if (con->plugin_ctx[p->id]) {
+		handler_ctx_free(con->plugin_ctx[p->id]);
+		con->plugin_ctx[p->id] = NULL;
+	}
+
+	return HANDLER_GO_ON;
+}
+
 URIHANDLER_FUNC(mod_instantmirror_uri_handler) {
-//	plugin_data *p = p_d;
-//	int s_len;
-//	size_t k, i;
 	struct sockaddr_un remote;
 	int s,t,len;
+	char path[100], i[2];
+	handler_ctx *hctx;
+	plugin_data *p = p_d;
+	
+	if (con->plugin_ctx[p->id]) {
+		hctx = con->plugin_ctx[p->id];
+
+		if (hctx->loops++ > 100) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",
+					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat");
+
+			return HANDLER_ERROR;
+		}
+
+		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
+	}
 
 	UNUSED(srv);
 
@@ -191,38 +221,45 @@ URIHANDLER_FUNC(mod_instantmirror_uri_handler) {
 	}
 	log_error_write(srv, __FILE__, __LINE__,  "s s", con->uri.path->ptr,  "-- handling file as instantmirror file CONNECTED");
 
-	if (send(s, con->uri.path->ptr, strlen(con->uri.path->ptr), 0) == -1)
+	if (send(s, con->uri.path->ptr, strlen(con->uri.path->ptr)+1, 0) == -1)
 	{
 		perror("send");
 		exit(1);
 	}
-	close(s);
 	
-	/*if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if(recv(s, i, 2, 0) == -1)
+	{
+		perror("recv i");
+		exit(1);
+	}
+	
+	if(strcmp(i,"0") == 0)
+		return HANDLER_GO_ON;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
-
-	mod_instantmirror_patch_connection(srv, con, p);
-
-	s_len = con->uri.path->used - 1;
-
-	for (k = 0; k < p->conf.match->used; k++) {
-		data_string *ds = (data_string *)p->conf.match->data[k];
-		int ct_len = ds->value->used - 1;
-
-		if (ct_len > s_len) continue;
-		if (ds->value->used == 0) continue;
-
-		if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
-			con->http_status = 403;
-
-			return HANDLER_FINISHED;
-		}
+	if(recv(s, path, 100, 0) == -1)
+	{
+		perror("recv");
+		exit(1);
 	}
 
-return HANDLER_FINISHED;*/
-	/* not found */
-	return HANDLER_GO_ON;
+	log_error_write(srv, __FILE__, __LINE__,  "s s", path,  "-- handling file as instantmirror file AFTER CONNECTED");
+
+	buffer_reset(con->request.uri);
+
+	buffer_append_string(con->request.uri,path);
+
+	close(s);
+	
+	if (con->plugin_ctx[p->id] == NULL) {
+		hctx = handler_ctx_init();
+		con->plugin_ctx[p->id] = hctx;
+	} else {
+		hctx = con->plugin_ctx[p->id];
+	}
+	
+	hctx->state = REWRITE_STATE_FINISHED;
+	
+	return HANDLER_COMEBACK;
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
@@ -235,6 +272,7 @@ int mod_instantmirror_plugin_init(plugin *p) {
 	p->handle_uri_clean  = mod_instantmirror_uri_handler;
 	p->set_defaults  = mod_instantmirror_set_defaults;
 	p->cleanup     = mod_instantmirror_free;
+	p->connection_reset = mod_rewrite_con_reset;
 
 	p->data        = NULL;
 

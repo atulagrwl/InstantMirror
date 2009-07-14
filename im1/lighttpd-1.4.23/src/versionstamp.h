@@ -1,1 +1,1 @@
-#define REPO_VERSION "-devel-68ea49e"
+#define REPO_VERSION "-devel-8c36d24"

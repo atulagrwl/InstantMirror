@@ -4,3 +4,5 @@ im
 CVS
 .cvsignore
 *.torrent
+*.*~
+a.out
