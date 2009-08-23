@@ -242,18 +242,22 @@ int getTorrent(const char* path, torrentStatus &torrent_status_obj)
 		std::cout << "1. Torrent Name :"<<torrent_name<<"\t Torrent File :"<<torrent_file_name<<std::endl;
 		index_t = check(torrent_name,torrent_file_name);
 		
-		char* fullPath = new char[strlen(DISK_LOCATION)+strlen(path)+1];
+		char* fullTorrentPath = new char[strlen(TORRENT_LOCATION)+strlen(torrent_name.c_str())+1];
 
-		strcpy(fullPath,DISK_LOCATION);
-		strcat(fullPath,path);
+		strcpy(fullTorrentPath,TORRENT_LOCATION);
+		strcat(fullTorrentPath,torrent_name.c_str());
+		
+		std::cout << "Full Path is :"<<fullTorrentPath<<"\n";
 		
 		struct stat stt;
-		if (lstat(fullPath, &stt) >= 0)
+		if (stat(fullTorrentPath, &stt) >= 0)
 		{
+		    std::cout<<"torrent object mtime is :"<<torrent_status_obj.timestamp<<"\t"<< "torrent file mtime is :"<<stt.st_mtime<<"\n";
+			
 		    if(!torrent_status_obj.isEmpty() && torrent_status_obj.isTorrentValid(stt.st_mtime) == false)
 		    {
 			std::cout<<"Snapshot migration called\n";
-			torrent_status_obj.snapshotMigration(fullPath);
+			torrent_status_obj.snapshotMigration(fullTorrentPath);
 		    }
 		}
 		
@@ -354,6 +358,11 @@ int getTorrent(const char* path, torrentStatus &torrent_status_obj)
 		//torrent_status_obj.print();
 		
 		//Download finished, setting mtime
+		
+		char* fullPath = new char[strlen(DISK_LOCATION)+strlen(path)+1];
+
+		strcpy(fullPath,DISK_LOCATION);
+		strcat(fullPath,path);
 		
 		struct utimbuf timebuf;
 		timebuf.actime = list[index_t].mtime;

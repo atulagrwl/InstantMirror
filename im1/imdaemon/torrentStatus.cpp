@@ -35,21 +35,26 @@ void torrentStatus::snapshotMigration (const char* path)
     for(int i=0; i<newTotalFiles; i++)
 	newFileStatus[i] = false;
     
-    int indexint = 0;
+    int indexint = 1;
     for(lb::torrent_info::file_iterator i = torrent_details->begin_files() ;
 		i != torrent_details->end_files(); ++i, ++indexint)
     {
 	if(fileStatus[indexint] == false)
+	{
+	    std::cout<<"Skipped "<<indexint<<"\n";
 	    continue;
-	
-	int indexintj = 0;
+	}
+	int indexintj = 1;
 	for(lb::torrent_info::file_iterator j = new_torrent_details->begin_files();
-		i != new_torrent_details->end_files(); ++j, ++indexintj)
+		j != new_torrent_details->end_files(); ++j, ++indexintj)
 	{
 	    if(i->path.string() == j->path.string())
 	    {
 		if(i->mtime == j->mtime)
+		{
+		    std::cout<<"Setting true for j="<<indexintj<<"\n";
 		    newFileStatus[indexintj] = true;
+		}
 	    }
 	}
     }
