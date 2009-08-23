@@ -6,7 +6,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <utime.h>
+#include <fcntl.h>
 
 #include "libtorrent/entry.hpp"
 #include "libtorrent/bencode.hpp"
@@ -20,8 +22,9 @@
 
 #include "daemon.h"
 #include "imdaemon.h"
+#include "torrentStatus.h"
 
-using namespace libtorrent;
+namespace lb = libtorrent;
 using namespace boost::filesystem;
 
 std::vector<torfile_list> tor::gettor(int argc,const char* argv)
@@ -32,7 +35,7 @@ std::vector<torfile_list> tor::gettor(int argc,const char* argv)
 	strcpy(argvv,TORRENT_LOCATION);
 	strcat(argvv,argv);
 	
-	printf("Inside gettor \t argvv is %s",argvv);
+	printf("Inside gettor \t argvv is %s\n",argvv);
 	
 	if (argc != 2)
 	{
@@ -55,8 +58,8 @@ std::vector<torfile_list> tor::gettor(int argc,const char* argv)
 		}
 		std::vector<char> buf(size);
 		std::ifstream(argvv, std::ios_base::binary).read(&buf[0], size);
-		lazy_entry e;
-		int ret = lazy_bdecode(&buf[0], &buf[0] + buf.size(), e);
+		lb::lazy_entry e;
+		int ret = lb::lazy_bdecode(&buf[0], &buf[0] + buf.size(), e);
 
 		if (ret != 0)
 		{
@@ -67,7 +70,7 @@ std::vector<torfile_list> tor::gettor(int argc,const char* argv)
 //			std::cout << "\n\n----- raw info -----\n\n";
 //			std::cout << e << std::endl;
 
-		torrent_info t(e);
+		lb::torrent_info t(e);
 
 		// print info about torrent
 //			std::cout << "\n\n----- torrent file info -----\n\n";
@@ -98,7 +101,7 @@ std::vector<torfile_list> tor::gettor(int argc,const char* argv)
 		torfile_list *list = new torfile_list;
 		std::string temp;
 //			std::vector<torfile_list> tor_list;
-		for (torrent_info::file_iterator i = t.begin_files();
+		for (lb::torrent_info::file_iterator i = t.begin_files();
 			i != t.end_files(); ++i, ++index)
 		{
 			int first = t.map_file(index, 0, 1).piece;
@@ -211,9 +214,8 @@ int check ( const std::string torrent_name, const std::string path_tmp)
 	return -1;
 }
 
-int getTorrent(const char* path)
+int getTorrent(const char* path, torrentStatus &torrent_status_obj)
 {
-	using namespace libtorrent;
 #if BOOST_VERSION < 103400
 	namespace fs = boost::filesystem;
 
@@ -224,9 +226,10 @@ int getTorrent(const char* path)
 	try
 #endif
 	{
-		session s;
-		torrent_handle handle;
-		torrent_status status;
+	    std::cout<<"daemon.getTorrent() , torrent_status_obj.isEmpty() = "<<torrent_status_obj.isEmpty()<<"\n";
+		lb::session s;
+		lb::torrent_handle handle;
+		lb::torrent_status status;
 		tor mytor;
 		std::string torrent_name(path);
 		std::string torrent_file_name;
@@ -239,6 +242,25 @@ int getTorrent(const char* path)
 		std::cout << "1. Torrent Name :"<<torrent_name<<"\t Torrent File :"<<torrent_file_name<<std::endl;
 		index_t = check(torrent_name,torrent_file_name);
 		
+		char* fullPath = new char[strlen(DISK_LOCATION)+strlen(path)+1];
+
+		strcpy(fullPath,DISK_LOCATION);
+		strcat(fullPath,path);
+		
+		struct stat stt;
+		if (lstat(fullPath, &stt) >= 0)
+		{
+		    if(torrent_status_obj.isTorrentValid(stt.st_mtime) == false)
+		    {
+			torrent_status_obj.snapshotMigration(fullPath);
+		    }
+		}
+		
+		//Checking if file already downloaded, if yes, do not download again, else continue
+		if(torrent_status_obj.fileStatus[index_t])
+		    return 0;
+		    
+		    
 		//Appending .torrent to last of torrent_name;
 		//torrent_name.append(".torrent");
 
@@ -270,20 +292,34 @@ int getTorrent(const char* path)
 				index_sym = sym_path.find("../");
 				std::cout<<"Next resolution is "<<sym_path<<"\n";
 			}
-			getTorrent(sym_path.c_str());
+			getTorrent(sym_path.c_str(),torrent_status_obj);
 			
 		}
 		
 		std::cout << "2. Torrent Name :"<<torrent_name<<"\t Torrent File :"<<torrent_file_name<<"\t Index No :"<<index_t<<std::endl;	
 
 		s.listen_on(std::make_pair(6881, 6889));
-		add_torrent_params p;
+		lb::add_torrent_params p;
 		p.save_path = DISK_LOCATION;
-		p.ti = new torrent_info(torrent_name.c_str());
+		p.ti = new lb::torrent_info((TORRENT_LOCATION + torrent_name).c_str());
 		handle = s.add_torrent(p);
-
 		handle.prioritize_files(priorities_files);
 
+		if(torrent_status_obj.isEmpty())
+		{
+		    std::string path = TORRENT_LOCATION + torrent_name;
+		    torrent_status_obj.torrent_details = new lb::torrent_info(path.c_str());
+		    torrent_status_obj.fileName = torrent_name;
+		    torrent_status_obj.filePath = path;
+		    torrent_status_obj.init();
+		    torrent_status_obj.setEmpty(false);
+		    struct stat stt;
+		    if (lstat(path.c_str(), &stt) >= 0) 
+			torrent_status_obj.timestamp = stt.st_mtime;
+		    
+		     std::cout<<"daemon.getTorrent() , torrent_status_obj.isEmpty() = "<<torrent_status_obj.isEmpty()<<"\n";
+		}
+		
 		printf("Download started\n");
 		
 		
@@ -304,7 +340,7 @@ int getTorrent(const char* path)
 			status = handle.status();
 
 			std::cout<<status.state<<"\t"<<std::flush;
-			if(status.state == torrent_status::finished)
+			if(status.state == lb::torrent_status::finished)
 			{
 				std::cout<< "Download Finished\n"<<std::flush;
 				break;
@@ -313,19 +349,24 @@ int getTorrent(const char* path)
 			sleep(5);
 		}
 		
+ 		torrent_status_obj.fileStatus[index_t] = true;
+		//torrent_status_obj.print();
+		
 		//Download finished, setting mtime
 		
 		struct utimbuf timebuf;
 		timebuf.actime = list[index_t].mtime;
 		timebuf.modtime = list[index_t].mtime;
 		
-		if( utime(path,&timebuf) < 0 )
+		if( utime(fullPath,&timebuf) < 0 )
 		{
 			std::cout<<"mtime not set\t Error code is "<<errno<<std::endl;
 			if (errno == ENOENT)
-				std::cout<<"filename does not exist\n Fileanme is "<<path<<std::endl;
+				std::cout<<"filename does not exist\n Filename is "<<fullPath<<std::endl;
 			else if (errno == EACCES)
 				std::cout<<"file permission denied\n";
+			else if (errno == 20)
+				std::cout<<"Not a directory\t"<<"Filename is "<<fullPath<<std::endl;
 		}
 		else
 			std::cout<<"mtime set"<<std::endl;
@@ -377,10 +418,4 @@ int tor_list_C (const char* a, torfile_list_C* list_C[])
 	}
 	printf("After loop in tor_list_C function, return value is %d \n",i);
 	return i;
-}
-
-void generateIndex (std::string pathToTorrent)
-{
-    std::string indexFile;
-    
 }

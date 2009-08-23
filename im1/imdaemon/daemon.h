@@ -1,7 +1,8 @@
 #ifndef DAEMON_H
 #define DAEMON_H
 
-#ifdef __cplusplus
+#include "torrentStatus.h"
+
 struct torfile_list
 {
 	long size;
@@ -40,9 +41,9 @@ char** fileList (const char *);
 
 int check_file( const char *file );
 
-int getTorrent(const char* torrent);
+int getTorrent(const char* torrent, torrentStatus &torrent_status_obj);
 
 int check (const std::string torrent_name, const std::string path);
-#endif
+
 
 #endif

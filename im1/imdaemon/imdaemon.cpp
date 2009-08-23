@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-//#include <stdio.h>
 #include <unistd.h>
 
 #include "imdaemon.h"
@@ -22,7 +21,8 @@ int main(void)
     socklen_t len, t;
     struct sockaddr_un local, remote;
     char str[101];
-
+    torrentStatus torrent_status_obj;
+    
     if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         perror("socket");
         exit(1);
@@ -70,7 +70,7 @@ int main(void)
 	if(valid == 1)
 	{
 	    std::string pathFile;
-	    pathFile = handleRequest(str);
+	    pathFile = handleRequest(str, torrent_status_obj);
 		
 	    char* pathToSent = new char[pathFile.length()+1];
 	    strcpy(pathToSent,pathFile.c_str());
@@ -110,7 +110,7 @@ int checkRequest(const char *url)
     }
 }
 
-std::string handleRequest(const char* url)
+std::string handleRequest(const char* url, torrentStatus &torrent_status_obj)
 {
     std::string urlPath;
     std::string torrentName;
@@ -133,7 +133,7 @@ std::string handleRequest(const char* url)
 	if(ck_index > -1)
 	{
 	    std::cout<<"Enterning into getTorrent by index>0\n";
-	    return getTorrentFile(torrentName, filePath);
+	    return getTorrentFile(torrentName, filePath, torrent_status_obj);
 	}
 	else
 	{
@@ -181,9 +181,9 @@ std::string getTorrentIndex(std::string urlPath)
     return myIndex.saveIndexFile();
 }
 
-std::string getTorrentFile(std::string torrentName, std::string filePath)
+std::string getTorrentFile(std::string torrentName, std::string filePath, torrentStatus &torrent_status_obj)
 {
     std::cout<<"Torrent Name is "<<torrentName<<" File Path is "<<filePath<<"\n";
-    getTorrent((torrentName+"/"+filePath).c_str());
+    getTorrent((torrentName+"/"+filePath).c_str(), torrent_status_obj);
     return torrentName+"/"+filePath;
 }
