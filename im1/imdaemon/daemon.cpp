@@ -250,14 +250,15 @@ int getTorrent(const char* path, torrentStatus &torrent_status_obj)
 		struct stat stt;
 		if (lstat(fullPath, &stt) >= 0)
 		{
-		    if(torrent_status_obj.isTorrentValid(stt.st_mtime) == false)
+		    if(!torrent_status_obj.isEmpty() && torrent_status_obj.isTorrentValid(stt.st_mtime) == false)
 		    {
+			std::cout<<"Snapshot migration called\n";
 			torrent_status_obj.snapshotMigration(fullPath);
 		    }
 		}
 		
 		//Checking if file already downloaded, if yes, do not download again, else continue
-		if(torrent_status_obj.fileStatus[index_t])
+		if(!torrent_status_obj.isEmpty() && torrent_status_obj.fileStatus[index_t])
 		    return 0;
 		    
 		    

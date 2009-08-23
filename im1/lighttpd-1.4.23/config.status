@@ -363,7 +363,7 @@ Copyright (C) 2008 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/home/atul/instantmirror/repo/im1/lighttpd-1.4.23'
+ac_pwd='/home/atul/projects/InstantMirror/im1/lighttpd-1.4.23'
 srcdir='.'
 INSTALL='/usr/bin/install -c'
 MKDIR_P='/bin/mkdir -p'
@@ -801,7 +801,7 @@ S["CFLAGS"]="-g -O2 -Wall -W -Wshadow -pedantic -std=gnu99"
 S["CC"]="gcc"
 S["am__untar"]="${AMTAR} xf -"
 S["am__tar"]="${AMTAR} chof - \"$$tardir\""
-S["AMTAR"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run tar"
+S["AMTAR"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run tar"
 S["am__leading_dot"]="."
 S["SET_MAKE"]=""
 S["AWK"]="mawk"
@@ -809,12 +809,12 @@ S["mkdir_p"]="/bin/mkdir -p"
 S["MKDIR_P"]="/bin/mkdir -p"
 S["INSTALL_STRIP_PROGRAM"]="$(install_sh) -c -s"
 S["STRIP"]="strip"
-S["install_sh"]="$(SHELL) /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/install-sh"
-S["MAKEINFO"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run makeinfo"
-S["AUTOHEADER"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run autoheader"
-S["AUTOMAKE"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run automake-1.10"
-S["AUTOCONF"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run autoconf"
-S["ACLOCAL"]="${SHELL} /home/atul/instantmirror/repo/im1/lighttpd-1.4.23/missing --run aclocal-1.10"
+S["install_sh"]="$(SHELL) /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/install-sh"
+S["MAKEINFO"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run makeinfo"
+S["AUTOHEADER"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run autoheader"
+S["AUTOMAKE"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run automake-1.10"
+S["AUTOCONF"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run autoconf"
+S["ACLOCAL"]="${SHELL} /home/atul/projects/InstantMirror/im1/lighttpd-1.4.23/missing --run aclocal-1.10"
 S["VERSION"]="1.4.23"
 S["PACKAGE"]="lighttpd"
 S["CYGPATH_W"]="echo"
